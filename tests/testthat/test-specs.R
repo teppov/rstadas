@@ -3,7 +3,7 @@
 # library( tidyverse )
 # library( readxl )
 # library( testthat )
-library( usethis )
+# library( usethis )
 
 excel_table_list <- td_read_excel_to_list(
     system.file(
@@ -38,7 +38,6 @@ df.raw <- read.csv(
     ),
     colClasses = 'character'
 )
-
 
 df <- td_conform_df(
     df.raw,
