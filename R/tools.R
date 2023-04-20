@@ -1,3 +1,26 @@
+
+
+#' Execute a function with an object as the first argument
+#' if execute is TRUE. Convenient for pipes.
+#'
+#' @param x The object as the first argument to the func
+#' @param execute Whether or not to execute the func
+#' @param func The function to be executed
+#' @param ... Additional arguments to the function
+#'
+#' @return The result from the function, or x
+#' @export
+#'
+#' @examples
+td_if_execute <- function( x, func, execute = TRUE, ... ) {
+    if( execute ) {
+        func( x, ... )
+    } else {
+        x
+    }
+}
+
+
 #' Test if x contains whole numbers (2, -1, 3.0, 46 etc.).
 #'
 #' The function is copied from the R Documentation: "integer".
@@ -38,8 +61,9 @@ is.td_wholenumber <- function( x ) {
 }
 
 
-#' Test if x contains integers. F.ex. "2.0" is not an integer,
-#' while "2" is. x can be numeric or character.
+#' Test if x contains discrete, i.e. integer, values.
+#' F.ex. "2.0" is not an integer, while "2" is.
+#' x can be numeric or character.
 #'
 #' @param x array of objects to be tested.
 #'
@@ -47,7 +71,7 @@ is.td_wholenumber <- function( x ) {
 #' @export
 #'
 #' @examples
-is.td_integer <- function( x ) {
+is.discrete <- function( x ) {
     dplyr::if_else(
         is.na( x ),
         NA,
@@ -56,7 +80,16 @@ is.td_integer <- function( x ) {
 }
 
 
-is.td_decimal <- function( x ) {
+#' Test if x contains continuous numeric values.
+#' All numeric values are considered continuous.
+#'
+#' @param x
+#'
+#' @return
+#' @export
+#'
+#' @examples
+is.continuous <- function( x ) {
     sapply(
         x,
         function( x ) {

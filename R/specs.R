@@ -1,18 +1,20 @@
 
-SETUP_TABLETYPES <- c( 'variable', 'rule' )
+SETUP_TABLETYPES <- c( 'variable', 'preprocess', 'rule' )
 
-VAR_DATATYPES <- c( 'integer', 'decimal', 'categorical', 'text' )
+VAR_DATATYPES <- c(
+    'discrete', 'continuous', 'nominal', 'ordinal', 'text'
+)
 
 SETUP_VALIDATOR <- validate::validator(
     tabletype_valid = tabletype %in% tabletypes,
     tablename_valid = tablename %in% tablenames
 )
 
-PREP_VALIDATOR <- validate::validator(
-    mappingkey_valid = is.character( mappingkey ),
-    newvarname_notna = !is.na( newvarname ),
-    operation_notna = !is.na( operation )
-)
+# PREP_VALIDATOR <- validate::validator(
+#     mappingkey_valid = is.character( mappingkey ),
+#     newvarname_notna = !is.na( newvarname ),
+#     operation_notna = !is.na( operation )
+# )
 
 VAR_VALIDATOR <- validate::validator(
     varname_notna = !is.na( varname ),
@@ -20,7 +22,8 @@ VAR_VALIDATOR <- validate::validator(
     datatype_valid = datatype %in% datatypes,
     unique_valid = unique %in% c( NA, 'unique' ),
     nona_valid = nona %in% c( NA, 'nona' ),
-    categorytable_valid = categorytable %in% tablenames
+    categorytable_valid = categorytable %in% tablenames,
+    navaluetable_valid = navaluetable %in% tablenames
 )
 
 CAT_VALIDATOR <- validate::validator(
@@ -32,7 +35,11 @@ CAT_VALIDATOR <- validate::validator(
 COL_VALIDATOR <- validate::validator(
     colorname_notna = !is.na( colorname ),
     colorname_unique = all_unique( colorname ),
-    colorhex_valid = grepl( colorhex_regex, colorhex )
+    colorhex_valid = grepl(
+        # Regex for colour hex code
+        '^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$',
+        colorhex
+    )
 )
 
 RULE_VALIDATOR <- validate::validator(
@@ -44,6 +51,10 @@ RULE_VALIDATOR <- validate::validator(
     description_valid = is.character( description )
 )
 
+NA_VALIDATOR <- validate::validator(
+    navalueset_notna = !is.na( navalueset )
+)
+
 #' Create a valid Stadas specification (a named list of tibbles)
 #' from a list of data frames.
 #'
@@ -53,7 +64,10 @@ RULE_VALIDATOR <- validate::validator(
 #' @export
 #'
 #' @examples
-td_create_specs <- function( table_list ) {
+td_create_specs <- function(
+        table_list,
+        validation_summary = FALSE
+) {
 
     if( !'setup' %in% names( table_list ) ) {
         stop( 'Given table list does not contain "setup" table!' )
@@ -78,26 +92,26 @@ td_create_specs <- function( table_list ) {
         ref = list(
             tabletypes = SETUP_TABLETYPES,
             tablenames = names( table_list )
-        )
+        ),
+        print_summary = validation_summary
     )
 
 
-    # Preprocess
-    #############################################
-
-    if( 'preprocess' %in% names( table_list ) ) {
-
-        specs$preprocess <- table_list$preprocess %>%
-            # Keep only rows where newvarname is not NA
-            dplyr::filter( !is.na( newvarname ) )
-
-        # Validation
-        td_validate_df(
-            specs$preprocess,
-            PREP_VALIDATOR,
-            'Preprocess table not valid.'
-        )
-    }
+    # # Preprocess
+    # #############################################
+    #
+    # # Get the preprocess table names from the setup table
+    # prepro_tablenames <- specs$setup %>%
+    #     filter( tabletype == 'preprocess' ) %>%
+    #     pull( tablename )
+    #
+    # if( length( prepro_tablenames ) > 0 ) {
+    #
+    #     # Bind preprocess tables
+    #     specs$preprocess <- dplyr::bind_rows(
+    #         table_list[prepro_tablenames]
+    #     )
+    # }
 
 
     # Variables
@@ -123,14 +137,15 @@ td_create_specs <- function( table_list ) {
         ref = list(
             datatypes = VAR_DATATYPES,
             tablenames = names( table_list )
-        )
+        ),
+        print_summary = validation_summary
     )
 
 
-    if( 'categorytable' %in% names( specs$variables ) ) {
+    # Categories
+    #############################################
 
-        # Categories
-        #############################################
+    if( 'categorytable' %in% names( specs$variables ) ) {
 
         # Get the category table names from the variable table
         category_tablenames <- specs$variables %>%
@@ -162,7 +177,8 @@ td_create_specs <- function( table_list ) {
             specs$categories,
             CAT_VALIDATOR,
             'Category table not valid.',
-            ref = list( tablenames = names( table_list ) )
+            ref = list( tablenames = names( table_list ) ),
+            print_summary = validation_summary
         )
 
         # Get the category set names
@@ -222,10 +238,10 @@ td_create_specs <- function( table_list ) {
             td_validate_df(
                 specs$color,
                 COL_VALIDATOR,
-                'Color table not valid.'
+                'Color table not valid.',
+                print_summary = validation_summary
             )
         }
-
     }
 
 
@@ -254,6 +270,70 @@ td_create_specs <- function( table_list ) {
         )
     }
 
+
+    # NA
+    #############################################
+
+    if( 'navaluetable' %in% names( specs$variables ) ) {
+
+        # Get the na value table names from the variable table
+        navalue_tablenames <- specs$variables %>%
+            filter( !is.na( navaluetable ) ) %>%
+            pull( navaluetable ) %>%
+            unique()
+
+        # The na value table names must be found in the given table list
+        if( !all( navalue_tablenames %in% names( table_list ) ) ) {
+            stop( paste0(
+                'All named na value tables not found
+                in the given table list!\n',
+                'The names in `navaluetable` column:\n',
+                paste0( navalue_tablenames, collapse = ', ' ), '\n',
+                'The names in table list:\n',
+                paste0( names( table_list ), collapse = ', ' ), '\n'
+            ) )
+        }
+
+        # Bind na value tables
+        specs$na <- dplyr::bind_rows(
+            table_list[navalue_tablenames]
+        ) %>%
+            # Keep only rows where navalueset is not NA
+            dplyr::filter( !is.na( navalueset ) )
+
+        # Validation
+        td_validate_df(
+            specs$na,
+            NA_VALIDATOR,
+            'NA table not valid.',
+            ref = list( tablenames = names( table_list ) ),
+            print_summary = validation_summary
+        )
+
+        # Get the category set names
+        var_navalue_setnames <- specs$variables %>%
+            filter( !is.na( navalueset ) ) %>%
+            pull( navalueset ) %>%
+            unique()
+        na_navalue_setnames <- specs$na %>%
+            filter( !is.na( navalueset ) ) %>%
+            pull( navalueset ) %>%
+            unique()
+
+        # The category set names in the variable tables
+        # must be found in the na tables
+        if( !all( var_navalue_setnames %in% na_navalue_setnames ) ) {
+            stop( paste0(
+                'All na value sets named in variable tables not found
+                in the na tables!\n',
+                'The na value set names in variable tables:\n',
+                paste0( var_navalue_setnames, collapse = ', ' ), '\n',
+                'The names in na tables:\n',
+                paste0( na_navalue_setnames, collapse = ', ' ), '\n'
+            ) )
+        }
+    }
+
     # Return
     specs
 }
@@ -280,104 +360,54 @@ td_create_var_rules <- function(
     varname <- specs_var_row['varname']
     datatype <- specs_var_row['datatype']
 
-    if( datatype == 'integer' ) {
+    if( datatype == 'discrete' ) {
         rules <- rules %>%
             add_row(
-                name = paste0( varname, '_int' ),
-                rule = paste0( 'is.td_integer( ', varname, ' )' ),
-                # rule = paste0( 'is.wholenumber( ', varname, ' )' ),
-                # Use regex to identify an integer
-                # rule = paste0(
-                #     'field_format( ',
-                #     varname,
-                #     ', "^-?[1-9]+[0-9]*$", ',
-                #     'type = "regex" )'
-                # ),
-                label = paste0( 'Integer variable: ', varname ),
+                name = paste0( varname, '_disc' ),
+                rule = paste0( 'is.discrete( ', varname, ' )' ),
+                label = paste0( 'Discrete variable: ', varname ),
                 description = paste0(
                     'A rule for testing if the values of ',
-                    'the variable "', varname, '" are integer numbers.'
+                    'the variable "', varname, '" are discrete numbers.'
                 )
             )
 
-    } else if( datatype == 'decimal' ) {
+    } else if( datatype == 'continuous' ) {
         rules <- rules %>%
             add_row(
-                name = paste0( varname, '_dec' ),
-                rule = paste0( 'is.td_decimal( ', varname, ' )' ),
-                # rule = paste0( 'is.numeric( ', varname, ' )' ),
-                # Use a regex to identify a decimal
-                # rule = paste0(
-                #     'field_format( ',
-                #     varname,
-                #     ', "^-?[1-9]+[0-9]*$", ',
-                #     'type = "regex" )'
-                # ),
-                label = paste0( 'Decimal variable: ', varname ),
+                name = paste0( varname, '_cont' ),
+                rule = paste0( 'is.continuous( ', varname, ' )' ),
+                label = paste0( 'Continuous variable: ', varname ),
                 description = paste0(
                     'A rule for testing if the values of ',
-                    'the variable "', varname, '" are decimal numbers.'
+                    'the variable "', varname, '" are continuous numbers.'
                 )
             )
 
-    } else if( datatype == 'categorical' ) {
+    } else if( datatype %in% c( 'nominal', 'ordinal' ) ) {
 
-        if( use_raw_values ) {
+        # Get the category names of the current category set
+        category_names <- specs$categories %>%
+            filter( categoryset == specs_var_row['categoryset'] ) %>%
+            pull( categoryname )
 
-            # Use the un-mapped, raw data values
-
-            # Get the category values of the current category set
-            category_values <- specs$categories %>%
-                filter( categoryset == specs_var_row['categoryset'] ) %>%
-                pull( paste(
-                    c( 'mapping', mapping_key ), collapse = '_'
-                ) )
-
-            # Add rows to the `validator_rules` data frame
-            rules <- rules %>%
-                add_row(
-                    name = paste0( varname, '_cat' ),
-                    rule = paste0(
-                        varname,
-                        ' %vin% c( "',
-                        paste( category_values, collapse = '", "' ),
-                        '" )'
-                    ),
-                    label = paste0( 'Categorical variable: ', varname ),
-                    description = paste0(
-                        'A rule for testing the values of ',
-                        'the variable "', varname, '" against ',
-                        'a set of predefined category values.'
-                    )
+        # Add rows to the `validator_rules` data frame
+        rules <- rules %>%
+            add_row(
+                name = paste0( varname, '_cat' ),
+                rule = paste0(
+                    varname,
+                    ' %vin% c( "',
+                    paste( category_names, collapse = '", "' ),
+                    '" )'
+                ),
+                label = paste0( 'Categorical variable: ', varname ),
+                description = paste0(
+                    'A rule for testing the values of ',
+                    'the variable "', varname, '" against ',
+                    'a set of predefined category names.'
                 )
-
-        } else {
-
-            # Use the actual, defined category names
-
-            # Get the category names of the current category set
-            category_names <- specs$categories %>%
-                filter( categoryset == specs_var_row['categoryset'] ) %>%
-                pull( categoryname )
-
-            # Add rows to the `validator_rules` data frame
-            rules <- rules %>%
-                add_row(
-                    name = paste0( varname, '_cat' ),
-                    rule = paste0(
-                        varname,
-                        ' %vin% c( "',
-                        paste( category_names, collapse = '", "' ),
-                        '" )'
-                    ),
-                    label = paste0( 'Categorical variable: ', varname ),
-                    description = paste0(
-                        'A rule for testing the values of ',
-                        'the variable "', varname, '" against ',
-                        'a set of predefined category names.'
-                    )
-                )
-        }
+            )
 
     } else {
 
@@ -491,311 +521,182 @@ td_get_category_names <- function(
 }
 
 
-#' Get the mapping between category names and the values in raw data.
-#'
-#' @param varname_str The name of a variable
-#' @param specs Stadas specs as a list of tibbles
-#' @param mapping_key An optional mapping to access the correct
-#'                    mapping column in the specs
-#' @param inverse If FALSE (the default), variable names are used as
-#'                the names of the named mapping list.
-#'                IF TRUE, the raw data values are used as
-#'                the names of the named mapping list
-#'                (suitable for, f.ex., `dplyr::recode()`).
-#'
-#' @return A named list of the category names and the values in raw data
-#' @export
-#'
-#' @examples
-td_get_category_mapping <- function(
+td_get_category_labels <- function(
         varname_str,
         specs,
-        mapping_key = NULL,
-        inverse = FALSE
+        lang = 'en'
 ) {
 
-     categoryset_str <- specs$variables %>%
-         filter( varname == varname_str ) %>%
-         pull( categoryset )
+    label_str <- paste( c( 'label', lang ), collapse = '_' )
 
-     categorysets <- specs$categories %>%
-         filter( categoryset == categoryset_str )
+    categoryset_str <- specs$variables %>%
+        filter( varname == varname_str ) %>%
+        pull( categoryset )
 
-     if( inverse ) {
-         categorysets %>% pull(
-             'categoryname',
-             name = paste( c( 'mapping', mapping_key ), collapse = '_' )
-         )
-     } else {
-         categorysets %>% pull(
-             paste( c( 'mapping', mapping_key ), collapse = '_' ),
-             name = categoryname
-         )
-     }
+    specs$categories %>%
+        filter( categoryset == categoryset_str ) %>%
+        select( categoryname, label_str ) %>%
+        deframe()
 }
 
 
-# Set the data types of variables
-td_set_var_dtype <- function(
-        df,
+td_get_category_colors <- function(
         varname,
         specs,
-        keep_raw_values = FALSE,
-        mapping_key = NULL
+        mapping_colname = NULL,
+        names_as_key = TRUE,
+        lang = 'en'
 ) {
 
-    dtype <- tibble::deframe(
-        specs$variables[c( 'varname', 'datatype' )]
-    )[varname]
-
-    if( dtype == 'integer' ) {
-        df <- df %>%
-            dplyr::mutate( !!varname := as.integer( .data[[varname]] ) )
-
-    } else if( dtype == 'decimal' ) {
-        df <- df %>%
-            dplyr::mutate( !!varname := as.numeric( .data[[varname]] ) )
-
-    } else if( dtype == 'categorical' ) {
-        if( !keep_raw_values ) {
-            # Recode raw values into specified category names
-            category_mapping <- td_get_category_mapping(
-                varname,
-                specs,
-                mapping_key,
-                # `recode()` requires the arguments in an inverse order
-                inverse = TRUE
-            )
-            df <- df %>%
-                dplyr::mutate( !!varname := dplyr::recode(
-                    .data[[varname]],
-                    !!!category_mapping
-                ) )
-        }
-        category_names <- td_get_category_names( varname, specs )
-        df <- df %>%
-            dplyr::mutate( !! varname := factor(
-                .data[[varname]],
-                levels = category_names
-            ) )
-            # mutate( across(
-            #     all_of( varname ),
-            #     ~factor( .x, levels = category_names )
-            # ) )
-
+    if( names_as_key ) {
+        key = 'varname'
     } else {
-        df <- df %>%
-            dplyr::mutate(
-                !! varname := as.character( .data[[varname]] )
-            )
+        key = paste( c( 'label', lang ), collapse = '_' )
     }
 
-    df
+    td_get_cat_spec( varname, specs, mapping_colname ) %>%
+        select( all_of( c( key, 'colorhex' ) ) ) %>%
+        deframe()
 }
 
 
-td_set_df_dtypes <- function(
-        df,
-        specs,
-        keep_raw_values = FALSE,
-        mapping_key = NULL
-) {
-
-    varnames <- pull( specs$variables, varname )
-
-    # Use only names found in the data
-    common_names <- varnames[varnames %in% names( df )]
-
-    # TODO: can you use some sort of "apply" with a data frame
-    # without dropping columns?
-    for( name in common_names ) {
-        df <- df %>%
-            td_set_var_dtype(
-                name,
-                specs,
-                keep_raw_values = keep_raw_values,
-                mapping_key = mapping_key
-            )
-    }
-
-    df
-}
-
-
-td_conform_df <- function(
-        df,
-        specs,
-        ignore_missingvars = FALSE,
-        raw_data_prefix = 'raw__',
-        mapping_key = NULL,
-        ignore_validation = FALSE,
-        validation_summary = FALSE,
-        fun_addmetadata = NULL,
-        fun_arg = NULL
-) {
-
-    # Keep track of "raw" data
-    df.raw <- df
-
-    # Preprocess raw data, if specified
-    if( 'preprocess' %in% names( specs ) ) {
-        df.raw <- td_preprocess( df.raw, specs$preprocess, mapping_key )
-    }
-
-    # If given, paste mapping key into the mapping column name
-    mapping_colname <- paste(
-        c( 'mapping', mapping_key ),
-        collapse = '_'
-    )
-
-    # Get the specified variable names
-    specified_varnames <- specs$variables %>%
-        filter( !is.na( varname ) ) %>%
-        pull( varname )
-
-    # Get the specified variables that exist in the data
-    if( mapping_colname %in% colnames( specs$variables ) ) {
-        # Create a names list of mapping labels, named with variable names
-        mapping <- specs$variables %>%
-            filter( !is.na( {{mapping_colname}} ) ) %>%
-            pull( mapping_colname, name = varname )
-        # Get the column labels that are common between
-        # the specification and the data
-        common_collabels <- mapping[mapping %in% colnames( df.raw )]
-        # Get the specified variables with the common column labels
-        df <- df.raw[common_collabels]
-        # Set the names to the defined variable names
-        df <- data.table::setnames(
-            df,
-            old = mapping,
-            new = names( mapping )
-        )
-    } else {
-        # Get the variable names that are common between
-        # the specification and the data
-        common_varnames <- specified_varnames[
-            specified_varnames %in% colnames( df.raw )
-        ]
-        df <- df.raw[common_varnames]
-    }
-
-    if( !ignore_missingvars ) {
-        # Add columns for variables not found in the data
-        # and set all values to `NA`
-        missing_varnames <- specified_varnames[
-            !specified_varnames %in% colnames( df )
-        ]
-        df[missing_varnames] <- NA
-    }
-
-    # Apply metadata function, if given
-    if( !is.null( fun_addmetadata ) ) {
-        df <- fun_addmetadata( df, fun_arg )
-    }
-
-    # Ensure that all the variables have the right data type
-    df <- td_set_df_dtypes( df, specs, mapping_key = mapping_key )
-
-    # Validation
-    checks <- validate::confront(
-        df,
-        x = td_create_validator( specs )
-    )
-    if( validation_summary ) {
-        print( dplyr::arrange(
-            validate::summary( checks )[1:7],
-            name
+td_get_spec_vartab_value <- function( varname, specs, speccol ) {
+    if( ! varname %in% specs$variables$varname ) {
+        stop( paste0(
+            'The variable name "', varname, '" is not defined!'
         ) )
     }
-    if( !ignore_validation ) {
-        if( !all( checks, na.rm = TRUE ) ) {
-            stop( 'Validation failed!\n' )
-        }
+    if( ! speccol %in% names( specs$variables ) ) {
+        stop( paste0(
+            'The name "', speccol,
+            '" is not valid specification column name!'
+        ) )
     }
-
-    if( !is.null( raw_data_prefix ) ) {
-        # Add the given prefix to the names of the raw data col labels
-        df.raw <- dplyr::rename_with(
-            df.raw, ~paste0( raw_data_prefix, .x )
-        )
-        # Bind the raw data to the valid data
-        df <- dplyr::bind_cols( df, df.raw )
-    }
-
-    df
-}
-
-
-td_edit_dflistitem <- function(
-        nameindex,
-        list,
-        specs,
-        keep_case = FALSE,
-        ignore_missingvars = FALSE,
-        raw_data_prefix = 'raw__',
-        mapping_key = NULL,
-        ignore_validation = FALSE,
-        validation_summary = FALSE,
-        fun_addmetadata = function( df, nameindex ) {
-            df %>% mutate( META__dataset_name = nameindex )
-        }
-) {
-
-    # Access an item in the list with the name
-    list[[nameindex]] %>%
-
-        td_conform_df(
-            specs = specs,
-            ignore_missingvars = ignore_missingvars,
-            raw_data_prefix = raw_data_prefix,
-            mapping_key = mapping_key,
-            ignore_validation = ignore_validation,
-            validation_summary = validation_summary,
-            fun_addmetadata = fun_addmetadata,
-            fun_arg = nameindex
-        )
-}
-
-
-td_conform_dflist_to_specs <- function(
-        df_list,
-        specs,
-        keep_case = FALSE,
-        ignore_missingvars = FALSE,
-        raw_data_prefix = 'raw__',
-        mapping_key = NULL,
-        ignore_validation = FALSE,
-        validation_summary = FALSE,
-        fun_addmetadata = function( df, nameindex ) {
-            df %>% mutate( META__dataset_name = nameindex )
-        }
-) {
-
-    # Adapted from an SO answers by
-    # Gavin Simpson, https://stackoverflow.com/a/11115275/7002525
-    # and Brian Diggs, https://stackoverflow.com/a/18520422/7002525
-
-    # Get the names of the tibble list
-    list_names <- names( df_list )
-
-    lapply(
-
-        # Use `setNames()` to apply a function for each name of the list
-        setNames( list_names, list_names ),
-
-        # The function to apply
-        td_edit_dflistitem,
-
-        # Pass parameters to the function
-        list = df_list,
-        specs = specs,
-        keep_case = keep_case,
-        ignore_missingvars = ignore_missingvars,
-        raw_data_prefix = raw_data_prefix,
-        mapping_key = mapping_key,
-        ignore_validation = ignore_validation,
-        validation_summary = validation_summary,
-        fun_addmetadata = fun_addmetadata
+    pull(
+        specs$variables[specs$variables[['varname']]==varname, ],
+        speccol
     )
 }
+td_get_datatype <- function( varname, specs ) {
+    td_get_spec_vartab_value( varname, specs, 'datatype' )
+}
+td_get_categorytable <- function( varname, specs ) {
+    td_get_spec_vartab_value( varname, specs, 'categorytable' )
+}
+td_get_categoryset <- function( varname, specs ) {
+    td_get_spec_vartab_value( varname, specs, 'categoryset' )
+}
+td_get_navalueset <- function( varname, specs ) {
+    td_get_spec_vartab_value( varname, specs, 'navalueset' )
+}
+
+
+td_get_num_varnames <- function( specs ) {
+    specs$variables %>%
+        filter( datatype %in% c( 'discrete', 'continuous' ) ) %>%
+        pull( varname )
+}
+
+
+td_get_na_vals <- function( varname, specs, na_colname ) {
+
+    na_vals <- specs$na %>%
+        filter(
+            navalueset == td_get_navalueset( varname, specs )
+        ) %>%
+        pull( .data[[na_colname]] )
+
+    if( length( na_vals ) > 0 ){
+        if( !any( is.na( na_vals ) ) ) {
+            return( na_vals )
+        }
+    }
+
+    c( '' )
+}
+
+
+td_get_all_na_vals <- function( specs, na_colname ) {
+
+    if(
+        'na' %in% names( specs ) &
+        'navalueset' %in% names( specs$variables) &
+        na_colname %in% names( specs$na )
+    ) {
+        func <- td_get_na_vals
+
+    } else {
+        # Always return c( '' )
+        func <- function( varname, specs, na_colname ) { c( '' ) }
+    }
+
+    na_vals <- lapply(
+        # Apply td_get_cat_spec to all categoric variable names
+        specs$variables$varname,
+        func,
+        # Arguments to td_get_na_vals
+        specs = specs,
+        na_colname = na_colname
+    )
+
+    names( na_vals ) <- specs$variables$varname
+
+    na_vals
+
+}
+
+
+td_get_cat_varnames <- function( specs ) {
+    specs$variables %>%
+        filter( datatype %in% c( 'nominal', 'ordinal' ) ) %>%
+        pull( varname )
+}
+
+
+td_get_cat_spec <- function( varname, specs, mapping_colname = NULL ) {
+
+    cat_spec <- specs$categories %>%
+        filter(
+            categoryset == td_get_categoryset( varname, specs )
+        )
+
+    if( 'colors' %in% names( specs ) ) {
+        cat_spec <- cat_spec %>%
+            left_join(
+                specs$colors,
+                by = c( 'colorname' )
+            )
+    }
+
+    # Get value mapping (use category names if no mapping defined)
+    if( is.null( mapping_colname ) ) {
+        cat_spec <- mutate( cat_spec, value = categoryname )
+    } else {
+        cat_spec <- mutate( cat_spec, value = .data[[mapping_colname]] )
+    }
+
+    cat_spec
+}
+
+
+td_get_cat_specs <- function( specs, mapping_colname = NULL ) {
+
+    cat_varnames <- td_get_cat_varnames( specs )
+
+    cat_specs <- lapply(
+        # Apply td_get_cat_spec to all categoric variable names
+        cat_varnames,
+        td_get_cat_spec,
+        # Arguments to td_get_cat_spec
+        specs = specs,
+        mapping_colname = mapping_colname
+    )
+
+    names( cat_specs ) <- cat_varnames
+
+    cat_specs
+}
+
+
+
 
