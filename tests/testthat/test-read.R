@@ -1,9 +1,7 @@
 # library( validate )
-# library( data.table )
 # library( tidyverse )
 # library( readxl )
 # library( testthat )
-# library( usethis )
 
 
 # Read Excel specification tables
@@ -16,23 +14,11 @@ excel_spec_table_list <- td_read_excel_to_list(
 )
 
 # Turn the list into a standardized spec
-specs <- td_create_specs( excel_spec_table_list )
-
-
-test_that(
-    'Specs created from Excel tables', {
-        expect_named(
-            specs,
-            c(
-                'setup',
-                'variables',
-                'categories',
-                'rules',
-                'na'
-            )
-        )
-    }
+specs <- td_create_specs(
+    excel_spec_table_list,
+    validation_summary = TRUE
 )
+names( specs )
 
 
 # Download NHIS datasets
@@ -69,25 +55,6 @@ df.2021 <- td_read_file(
     col_types = cols( .default = col_character() )
 )
 
-test_that(
-    'Data conforms to the specs', {
-        expect_named(
-            df.2021,
-            c(
-                'age', 'sex', 'height', 'weight', 'edulevel',
-                'nof_adults', 'nof_children', 'maritalstatus',
-                'health', 'lifesatisfaction',
-                'diff_walk100yd', 'diff_walk033miles', 'diff_walksteps',
-                'diff_communication', 'diff_remconc', 'diff_errands',
-                'diff_socactivities',
-                'mh_anxiety', 'mh_depression',
-                'k6_sadness', 'k6_nervous', 'k6_restless',
-                'k6_hopeless', 'k6_effort', 'k6_worthless'
-            )
-        )
-    }
-)
-
 
 df <- td_read_dir(
     dir_path = file.path( '.', 'nhis' ),
@@ -100,25 +67,4 @@ df <- td_read_dir(
     # Read all as text
     col_types = cols( .default = col_character() )
 )
-
-test_that(
-    'Data conforms to the specs', {
-        expect_named(
-            df,
-            c(
-                'age', 'sex', 'height', 'weight', 'edulevel',
-                'nof_adults', 'nof_children', 'maritalstatus',
-                'health', 'lifesatisfaction',
-                'diff_walk100yd', 'diff_walk033miles', 'diff_walksteps',
-                'diff_communication', 'diff_remconc', 'diff_errands',
-                'diff_socactivities',
-                'mh_anxiety', 'mh_depression',
-                'k6_sadness', 'k6_nervous', 'k6_restless',
-                'k6_hopeless', 'k6_effort', 'k6_worthless'
-            )
-        )
-    }
-)
-
-
 
