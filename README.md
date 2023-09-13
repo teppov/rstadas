@@ -32,32 +32,32 @@ The package contains an example specification for [National Health Interview Sur
 You can access the specification with `system.file()`, and read the Excel sheets into a named list of data frames:
 
 ```
-excel_table_list <- td_read_excel_to_list(
+excel_spec_table_list <- td_read_excel_to_list(
     system.file(
-        'stadas_v-0-1_nhis.xlsx',
+        'nhis_stadas-v-0-3.xlsx',
         package = 'rstadas',
         mustWork = TRUE
     )
 )
 
-names( excel_table_list )
+names( excel_spec_table_list )
 
-# [1] "setup"         "preprocess"    "var_general"   "cat_general"   "var_wellbeing" "cat_wellbeing" "rules_general"
+ [1] "setup"         "var_general"   "na_general"    "cat_general"   "var_wellbeing" "cat_wellbeing" "rules_general" "col_qua15"     "col_seq11"     "col_div11"
 ```
 
 Then you can turn the list of tables into a standardized specification:
 
 ```
-specs <- td_create_specs( excel_table_list )
+specs <- td_create_specs( excel_spec_table_list )
 
 names( specs )
-# [1] "setup"      "variables"  "categories" "rules"    "na"
+
+# [1] "setup"      "variables"  "categories" "colors"    "rules"      "na" 
 ```
 
 You can download NHIS datasets as zipped CSV files from the NHIS website:
 
 ```
-
 # 2019
 download.file(
     url = 'https://ftp.cdc.gov/pub/Health_Statistics/NCHS/Datasets/NHIS/2019/adult19csv.zip',
@@ -75,7 +75,6 @@ download.file(
     url = 'https://ftp.cdc.gov/pub/Health_Statistics/NCHS/Datasets/NHIS/2021/adult21csv.zip',
     destfile = file.path( '.', 'nhis', 'nhis_2021.zip' )
 )
-
 ```
 
 The raw datasets have NHIS defined column names and values coded with (mostly) integers:
@@ -111,17 +110,22 @@ read_csv( file.path( '.', 'nhis', 'nhis_2021.zip' ) ) %>%
 Using the specs, you can read a data file into a data frame that conforms to your specs:
 
 ```
-
-df.2021 <- td_read_file(
+df.2021 <- td_read_data_file(
     file_path = file.path( '.', 'nhis', 'nhis_2021.zip' ),
     read_func = read_csv,
     specs = specs,
 
+    drop_na_colnames = NULL,  # default
+
+    varmap_func = td_varmap,  # default
+
+    mapping_key = NULL,  # default
     # Pick a 4-digit key from the file name for mapping names
     mapping_key_pattern = '[0-9]{4}',
 
     # Use rstadas function to add the survey year as metadata
     metadata_func = td_metadata_year,
+    metadata_df = NULL,  # default
 
     # Drop original (raw) data columns
     keep_originals = FALSE,
@@ -137,7 +141,6 @@ df.2021 <- td_read_file(
 Now, it's easier to understand what is in the data, and the data types of the variables are correct:
 
 ```
-
 df.2021 %>%
     head( c( 6, 6 ) )
 
@@ -156,13 +159,21 @@ df.2021 %>%
 If you have multiple files in the same directory (say, NHIS datasets from the years 2019, 2020 and 2021), you can read them all at once into the same data frame:
 
 ```
-
-df <- td_read_dir(
+df <- td_read_data_dir(
     dir_path = file.path( '.', 'nhis' ),
     specs = specs,
     read_func = read_csv,
+
+    drop_na_colnames = NULL,  # default
+
+    varmap_func = td_varmap,  # default
+
+    mapping_key = NULL,  # default
     mapping_key_pattern ='[0-9]{4}',
+
     metadata_func = td_metadata_year,
+    metadata_df = NULL,  # default
+
     keep_originals = FALSE,
 
     # Read all as text
@@ -170,5 +181,4 @@ df <- td_read_dir(
 )
 
 # Multiple files in zip: reading 'adult21.csv'
-
 ```
