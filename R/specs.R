@@ -282,55 +282,61 @@ td_create_specs <- function(
             pull( navaluetable ) %>%
             unique()
 
-        # The na value table names must be found in the given table list
-        if( !all( navalue_tablenames %in% names( table_list ) ) ) {
-            stop( paste0(
-                'All named na value tables not found
-                in the given table list!\n',
-                'The names in `navaluetable` column:\n',
-                paste0( navalue_tablenames, collapse = ', ' ), '\n',
-                'The names in table list:\n',
-                paste0( names( table_list ), collapse = ', ' ), '\n'
-            ) )
-        }
+        if( length( navalue_tablenames ) > 0 ) {
 
-        # Bind na value tables
-        specs$na <- dplyr::bind_rows(
-            table_list[navalue_tablenames]
-        ) %>%
-            # Keep only rows where navalueset is not NA
-            dplyr::filter( !is.na( navalueset ) )
+            if( navalue_tablenames %in% names( table_list ) ) {
 
-        # Validation
-        td_validate_df(
-            specs$na,
-            NA_VALIDATOR,
-            'NA table not valid.',
-            ref = list( tablenames = names( table_list ) ),
-            print_summary = validation_summary
-        )
+                # The na value table names must be found in the given table list
+                if( !all( navalue_tablenames %in% names( table_list ) ) ) {
+                    stop( paste0(
+                        'All named na value tables not found
+                        in the given table list!\n',
+                        'The names in `navaluetable` column:\n',
+                        paste0( navalue_tablenames, collapse = ', ' ), '\n',
+                        'The names in table list:\n',
+                        paste0( names( table_list ), collapse = ', ' ), '\n'
+                    ) )
+                }
 
-        # Get the category set names
-        var_navalue_setnames <- specs$variables %>%
-            filter( !is.na( navalueset ) ) %>%
-            pull( navalueset ) %>%
-            unique()
-        na_navalue_setnames <- specs$na %>%
-            filter( !is.na( navalueset ) ) %>%
-            pull( navalueset ) %>%
-            unique()
+                # Bind na value tables
+                specs$na <- dplyr::bind_rows(
+                    table_list[navalue_tablenames]
+                ) %>%
+                    # Keep only rows where navalueset is not NA
+                    dplyr::filter( !is.na( navalueset ) )
 
-        # The category set names in the variable tables
-        # must be found in the na tables
-        if( !all( var_navalue_setnames %in% na_navalue_setnames ) ) {
-            stop( paste0(
-                'All na value sets named in variable tables not found
-                in the na tables!\n',
-                'The na value set names in variable tables:\n',
-                paste0( var_navalue_setnames, collapse = ', ' ), '\n',
-                'The names in na tables:\n',
-                paste0( na_navalue_setnames, collapse = ', ' ), '\n'
-            ) )
+                # Validation
+                td_validate_df(
+                    specs$na,
+                    NA_VALIDATOR,
+                    'NA table not valid.',
+                    ref = list( tablenames = names( table_list ) ),
+                    print_summary = validation_summary
+                )
+
+                # Get the category set names
+                var_navalue_setnames <- specs$variables %>%
+                    filter( !is.na( navalueset ) ) %>%
+                    pull( navalueset ) %>%
+                    unique()
+                na_navalue_setnames <- specs$na %>%
+                    filter( !is.na( navalueset ) ) %>%
+                    pull( navalueset ) %>%
+                    unique()
+
+                # The category set names in the variable tables
+                # must be found in the na tables
+                if( !all( var_navalue_setnames %in% na_navalue_setnames ) ) {
+                    stop( paste0(
+                        'All na value sets named in variable tables not found
+                        in the na tables!\n',
+                        'The na value set names in variable tables:\n',
+                        paste0( var_navalue_setnames, collapse = ', ' ), '\n',
+                        'The names in na tables:\n',
+                        paste0( na_navalue_setnames, collapse = ', ' ), '\n'
+                    ) )
+                }
+            }
         }
     }
 
