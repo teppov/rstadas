@@ -21,10 +21,10 @@ td_varmap <- function(
     # (all non-NA names in the mapping should exist)
     defined_colnames <- na.omit( mapping )
     if( !all( defined_colnames %in% names( df ) ) ) {
-        stop( paste0(
+        warning( paste0(
             'All defined columns do not exist in the data: ',
             paste(
-                mapping[!defined_colnames %in% names( df )],
+                defined_colnames[!defined_colnames %in% names( df )],
                 collapse = ', '
             )
         ) )
@@ -33,7 +33,7 @@ td_varmap <- function(
     # Loop over all defined variable names and copy the respective col
     for( name in names( mapping ) ) {
         colname <- mapping[[name]]
-        if( is.na( colname ) ) {
+        if( is.na( colname ) | !( colname %in% names( df ) ) ) {
             # The variable has no column in the data: fill with NA
             df[name] <- NA_character_
         } else {
