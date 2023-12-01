@@ -1,3 +1,54 @@
+#' Calculate a row-wise summary across variables.
+#' Return `NA` if nothing found with the `tidy_select`.
+#' To be used inside `mutate()`, for example:
+#'
+#' df %>%
+#'     mutate(
+#'         mean__ce_det = mean(
+#'             c_across( any_of( c(
+#'                 "num__ce_det_01", "num__ce_det_02"
+#'             ) ) ),
+#'             na.rm = TRUE
+#'         )
+#' =>
+#'         mean__ce_det = bwr_summary_across(
+#'             any_of( c(
+#'                 "num__ce_det_01", "num__ce_det_02"
+#'             ) ),
+#'             na.rm = TRUE
+#'         )
+#'     )
+#'
+#' @param tidy_select A tidyselect selection of variables
+#' @param summary_func A summary function to be used across the variables.
+#'                     Default: `mean`
+#' @param ... Additional arguments for the summary function,
+#'            for example `na.rm = TRUE`
+#'
+#' @return The summary calculation, or `NA` if nothing found with `tidy_select`.
+#' @export
+#'
+#' @examples
+#'
+td_summary_across <- function(
+        tidy_select,
+        summary_func = mean,
+        na_ratio = 0.5,
+        ...
+) {
+
+    cx <- c_across( {{ tidy_select }} )
+
+    if( is.null( cx ) ) return( NA )
+
+    nof_vars <- length( cx )
+
+    if_else(
+        sum( is.na( cx ) ) / nof_vars < na_ratio,
+        summary_func( cx, ... ),
+        NA_real_
+    )
+}
 
 
 #' Execute a function with an object as the first argument
