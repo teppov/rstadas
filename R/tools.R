@@ -72,6 +72,59 @@ td_if_execute <- function( x, func, execute = TRUE, ... ) {
 }
 
 
+#' Reorder factor levels by sorting along another variable
+#'
+#' @param df a data frame with variables x and y
+#' @param .f A factor (or character vector).
+#' @param x The levels of .f are reordered so that the values of
+#'          .fun( .x, ... ) are in ascending order.
+#' @param .fun A summary function.
+#' @param .desc Order in descending order?
+#' @param .ordered Will the factor be an ordered factor?
+#' @param ... Other arguments passed on to .fun, such as na.rm = TRUE.
+#'
+#' @return
+#' @export
+#'
+#' @examples
+td_fct_reorder <- function(
+        df,
+        .f,
+        .x,
+        .fun = mean,
+        .desc = TRUE,
+        .ordered = TRUE,
+        ...
+) {
+
+    smr <- df %>%
+        group_by( {{ .f }} ) %>%
+        summarise(
+            value = .fun( {{ .x }}, ... )
+        ) %>%
+        drop_na()
+
+    if( .desc ) {
+        factor_levels <- smr %>%
+            arrange( desc( value ) ) %>%
+            pull( {{ .f }} )
+    } else {
+        factor_levels <- smr %>%
+            arrange( value ) %>%
+            pull( {{ .f }} )
+    }
+
+    df %>%
+        mutate(
+            {{ .f }} := factor(
+                {{ .f }},
+                levels = factor_levels,
+                ordered = .ordered
+            )
+        )
+}
+
+
 #' Test if x contains whole numbers (2, -1, 3.0, 46 etc.).
 #'
 #' The function is copied from the R Documentation: "integer".
