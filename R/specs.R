@@ -624,7 +624,11 @@ td_get_na_vals <- function( varname, specs, na_colname ) {
 
 td_get_all_na_vals <- function( specs, na_colname ) {
 
-    if(
+    if( is.null( na_colname ) ) {
+        # Always return c( '' )
+        func <- function( varname, specs, na_colname ) { c( '' ) }
+
+    } else if(
         'na' %in% names( specs ) &
         'navalueset' %in% names( specs$variables) &
         na_colname %in% names( specs$na )
