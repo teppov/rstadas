@@ -121,5 +121,44 @@ td_parse_all_categorical <- function(
 }
 
 
+#' If the data already has the right values (e.g. categry names)
+#' but the data types in the data frame may not be correct
+#' (e.g. char instead of Factor or Ordinal), use this function.
+#'
+#' @param df
+#' @param specs
+#'
+#' @return
+#' @export
+#'
+#' @examples
+td_parse_valid_data <- function( df, specs ) {
 
+    for ( name in td_get_cat_varnames( specs ) ) {
+
+        df <- df |>
+
+            mutate(
+                !!name := parse_factor(
+                    # Ensure first that all are character (also all-NA columns)
+                    as.character( .data[[name]] ),
+                    levels = td_get_category_names( name, specs ),
+                    ordered = pull(
+                        specs$variables[specs$variables$varname==name, ],
+                        datatype
+                    ) == 'ordinal'
+                )
+            )
+    }
+
+    df |>
+
+        mutate( across(
+            all_of( td_get_num_varnames( specs ) ),
+            as.character
+        ) ) |>
+
+        td_parse_all_numeric( specs )
+
+}
 
