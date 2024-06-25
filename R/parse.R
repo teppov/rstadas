@@ -143,6 +143,7 @@ td_parse_valid_data <- function( df, specs ) {
                     # Ensure first that all are character (also all-NA columns)
                     as.character( .data[[name]] ),
                     levels = td_get_category_names( name, specs ),
+                    include_na = FALSE,
                     ordered = pull(
                         specs$variables[specs$variables$varname==name, ],
                         datatype
